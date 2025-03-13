@@ -1,0 +1,23 @@
+
+要运行提供的代码，你需要安装以下库：
+
+bash
+ 基础依赖（PyTorch和量子计算）
+pip install torch pennylane
+
+ ONNX导出支持（通常PyTorch已内置，但建议确保最新版）
+pip install onnx
+
+ 如果涉及BERT特征生成（比如用Hugging Face Transformers）
+pip install transformers
+
+ 各库的作用说明：
+1. PyTorch - 神经网络框架（`torch`）
+2. PennyLane - 量子机器学习库（实现`QuantumLayer`）
+3. ONNX - 模型导出格式支持（`torch.onnx`依赖）
+4. Transformers - 仅当需要生成BERT输入时安装（如从文本提取特征）
+
+> 注意：确保`QuantumLayer`的实际实现依赖的量子后端（如IBM Qiskit或其他），可能需要额外安装插件，例如：
+> bash
+> pip install pennylane-qiskit   如果使用IBM量子后端
+>

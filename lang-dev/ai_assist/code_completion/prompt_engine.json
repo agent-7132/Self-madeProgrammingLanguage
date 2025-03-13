@@ -1,0 +1,25 @@
+{
+  "context_strategies": {
+    "bilingual": {
+      "max_tokens": 512,
+      "template": "<|zh-en|>{{chinese_code}}\n// Equivalent English:\n{{english_code}}\n<|sandbox|>",
+      "examples": [
+        {
+          "chinese": "函数 计算总和(列表) { 返回 列表.减少(加法) }",
+          "english": "function calculateSum(list) { return list.reduce(add) }"
+        }
+      ]
+    },
+    "type_hint": {
+      "type_mapping": {
+        "动态": "dynamic",
+        "静态": "static",
+        "泛型": "generic"
+      },
+      "annotation_syntax": "/* @type {{type}} */"
+    }
+  },
+  "temperature": 0.7,
+  "max_new_tokens": 128,
+  "repetition_penalty": 1.2
+}
