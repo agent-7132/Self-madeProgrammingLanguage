@@ -2,6 +2,8 @@ from qiskit import QuantumCircuit, execute
 from qiskit_aer import AerSimulator
 from qiskit.visualization import plot_histogram
 import hashlib
+import numpy as np
+from qiskit.circuit.library import QuantumFourierTransform, CRYGate
 
 class QuantumValidator:
     def __init__(self, backend=AerSimulator(method='matrix_product_state')):
@@ -30,13 +32,21 @@ class QuantumValidator:
         }
 
     def _modular_exponentiation(self, N):
-        # 模块化指数运算量子实现
         cc = QuantumCircuit(9, name="ModExp")
-        # ... 具体实现细节 ...
+        for exponent in range(4):
+            for q in range(4):
+                cc.append(CRYGate(2**exponent * np.pi/N), [q, 4+exponent])
+            cc.append(QuantumFourierTransform(4, do_swaps=False), [4,5,6,7])
+            for i in reversed(range(4)):
+                for j in reversed(range(i)):
+                    cc.cp(-np.pi/(2**(i-j)), j, i)
+            cc.append(QuantumFourierTransform(4, inverse=True, do_swaps=False), [4,5,6,7])
         return cc.to_instruction()
 
-    def _quantum_fourier_transform(self, n_qubits):
-        # 量子傅里叶变换实现
-        qft = QuantumCircuit(n_qubits, name="QFT")
-        # ... 具体实现细节 ...
+    def _quantum_fourier_transform(self, n):
+        qft = QuantumCircuit(n, name="QFT")
+        for j in range(n):
+            for k in range(j):
+                qft.cp(np.pi/(2**(j-k)), k, j)
+            qft.h(j)
         return qft.to_instruction()

@@ -1,0 +1,21 @@
+federation:
+  name: quantum_secure_network
+  nodes:
+    - address: 192.168.1.101:50051
+      role: coordinator
+      shard_range: 0-511
+      security_level: 3
+    - address: 192.168.1.102:50051  
+      role: worker
+      shard_range: 512-1023
+      security_level: 2
+
+quantum_security:
+  key_exchange: BB84
+  encryption: Kyber-1024
+  signature: Dilithium3
+
+aggregation:
+  quantum_compression: true
+  noise_level: 0.7
+  max_retries: 5

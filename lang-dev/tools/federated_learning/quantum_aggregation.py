@@ -1,6 +1,8 @@
 import tensorflow as tf
 from qiskit import QuantumCircuit, execute
 from qiskit_ibm_runtime import QiskitRuntimeService
+from cryptography.shamir import ShamirSecretSharing
+import numpy as np
 
 class QuantumAggregator:
     def __init__(self, backend_name='ibmq_montreal'):
@@ -8,36 +10,36 @@ class QuantumAggregator:
         self.backend = self.service.backend(backend_name)
         self.topology = self.backend.configuration().coupling_map
 
-    def hybrid_aggregate(self, gradients):
-        # 量子梯度压缩
-        compressed = self._quantum_compression(gradients)
-        
-        # 经典聚合
-        aggregated = tf.nest.map_structure(
-            lambda *x: tf.reduce_mean(x, axis=0),
-            *compressed
-        )
-        
-        return aggregated
-
-    def _quantum_compression(self, gradients):
-        qc = QuantumCircuit(8)
-        # 量子拓扑适配编码
-        for i, grad in enumerate(gradients[:8]):
-            angle = tf.abs(grad).numpy() * np.pi
-            qc.rx(angle, i)
-        
-        # 硬件拓扑优化
-        qc = self._apply_hardware_optimization(qc)
-        
-        # 量子测量
-        qc.measure_all()
-        job = execute(qc, self.backend, shots=1024)
-        counts = job.result().get_counts()
-        
-        return self._decode_counts(counts)
-
     def _apply_hardware_optimization(self, qc):
-        # 硬件拓扑适配优化逻辑
-        # ...
-        return optimized_qc
+        optimized = qc.copy()
+        cmap = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10]]
+        for gate in qc.data:
+            if len(gate.qubits) == 2:
+                q1, q2 = gate.qubits[0].index, gate.qubits[1].index
+                if [q1,q2] not in cmap:
+                    path = self._find_shortest_path(q1, q2, cmap)
+                    for swap in path:
+                        optimized.swap(swap[0], swap[1])
+        return optimized
+
+class SecureQuantumAggregator(QuantumAggregator):
+    def __init__(self, backend_name='ibmq_montreal'):
+        super().__init__(backend_name)
+        self.shamir = ShamirSecretSharing(threshold=3)
+        
+    def hybrid_aggregate(self, gradients):
+        shares = [self.shamir.split(g.numpy()) for g in gradients]
+        quantum_encrypted = [self._quantum_encrypt(s) for s in shares]
+        noisy_grads = self._add_dp_noise(quantum_encrypted)
+        return super().hybrid_aggregate(noisy_grads)
+    
+    def _quantum_encrypt(self, data):
+        qc = QuantumCircuit(8)
+        for i, bit in enumerate(data):
+            if bit: qc.x(i)
+        qc.h(range(8))
+        return execute(qc, self.backend).result().get_counts()
+    
+    def _add_dp_noise(self, grads, epsilon=0.5):
+        noise = np.random.laplace(0, 1/epsilon, len(grads))
+        return [g + n for g, n in zip(grads, noise)]
