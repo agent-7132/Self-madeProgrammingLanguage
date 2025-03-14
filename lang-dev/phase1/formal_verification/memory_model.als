@@ -1,6 +1,13 @@
 module memory_model
 open util/ordering[Time]
 
+sig Complex {
+  real: one Int,
+  imag: one Int
+} {
+  add[mul[real, real], mul[imag, imag]] = 1
+}
+
 sig MemoryBlock {
   var owner: lone Process,
   var zone: Zone
@@ -17,7 +24,6 @@ sig QuantumState {
 }
 
 enum Basis { Computational, Hadamard }
-sig Complex {}
 
 sig Process {}
 sig Zone { accessPolicy: Policy }
@@ -35,6 +41,12 @@ pred SafeAccess(t: Time) {
 
 fact QuantumBarrier {
   always all q: Qubit | q.zone != q.entanglement.zone
+}
+
+fact Normalization {
+  always all qs: QuantumState | 
+    add[mul[qs.amplitude.real, qs.amplitude.real], 
+        mul[qs.amplitude.imag, qs.amplitude.imag]] = 1
 }
 
 assert SafetyInvariant {

@@ -3,12 +3,20 @@ federation:
   nodes:
     - address: 192.168.1.101:50051
       role: coordinator
-      shard_range: 0-511
+      shard_range: [0, 511]
       security_level: 3
     - address: 192.168.1.102:50051  
       role: worker
-      shard_range: 512-1023
+      shard_range: [512, 1023]
       security_level: 2
+
+model:
+  architecture: transformer
+  params:
+    num_layers: 12
+    hidden_size: 768
+    attention_heads: 12
+    vocab_size: 50000  # 新增词表大小约束
 
 quantum_security:
   key_exchange: BB84
@@ -19,3 +27,4 @@ aggregation:
   quantum_compression: true
   noise_level: 0.7
   max_retries: 5
+  shard_validation: true  # 新增分片验证开关
