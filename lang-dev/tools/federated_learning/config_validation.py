@@ -23,3 +23,11 @@ class ConfigValidator:
         levels = {n['security_level'] for n in self.config['federation']['nodes']}
         if max(levels) > 3:
             raise ValueError("Security level cannot exceed 3")
+        
+        # 文档2量子加密要求
+        if self.config['quantum_security']['encryption'] not in ['Kyber-1024', 'NTRU']:
+            raise ValueError("必须使用后量子加密算法")
+            
+        # 文档1包管理系统版本隔离要求
+        if 'version_isolation' not in self.config['aggregation']:
+            self.config['aggregation']['version_isolation'] = True
