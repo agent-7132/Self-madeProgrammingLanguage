@@ -1,14 +1,21 @@
 validation_protocol:
+  quantum_flow:
+    error_budget:
+      single_qubit: ≤1e-4
+      multi_qubit: ≤5e-3
+    verification_tools:
+      - qiskit-symbex
+      - klee
   layers:
     - type: quantum
       depth: 21
       metrics:
-        - entanglement_fidelity ≥99.9%
-        - decoherence_time ≥100ms
+        entanglement_fidelity ≥99.9%
+        decoherence_time ≥100ms
     - type: hybrid
       thresholds:
-        - quantum_classic_ratio ≥3:1
-        - error_margin ≤0.05
+        quantum_classic_ratio ≥3:1
+        error_margin ≤0.05
   security:
     - post_quantum_crypto: CRYSTALS-Dilithium
     - quantum_key_distribution: BB84
