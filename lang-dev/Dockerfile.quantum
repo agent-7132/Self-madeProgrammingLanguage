@@ -1,11 +1,14 @@
 # ==== Dockerfile.quantum ====
-FROM ubuntu:22.04
+FROM nvidia/cuda:12.2.0-base-ubuntu22.04
 
 # Quantum工具链基础
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     software-properties-common \
+    cuda-toolkit-12-2 \
+    nvidia-driver-535 \
+    libcudnn8 \
     && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
     && echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" >> /etc/apt/sources.list.d/llvm.list \
     && apt-get update && apt-get install -y \
@@ -29,6 +32,10 @@ RUN apt-get update && apt-get install -y \
 RUN pip3 install \
     qiskit==0.43.0 \
     qiskit-aer==0.12.1 \
+    cupy-cuda12x \
+    torch==2.1.0 \
+    torchvision==0.16.0 \
+    torchaudio==2.1.0 \
     tensorflow-quantum==1.0.0 \
     onnxruntime==1.15.0 \
     protoactor==2.3.1 \
@@ -37,15 +44,15 @@ RUN pip3 install \
     numba==0.57.0 \
     mpi4py==3.1.4 \
     py-cpuinfo==9.0.0 \
-    torch \
     pennylane \
     transformers
 
-# 量子开发环境配置
+# 配置环境变量
 ENV QISKIT_IBM_TOKEN="YOUR_API_TOKEN"
 ENV QSHARP_PACKAGES="/opt/qsharp-packages"
-ENV LD_LIBRARY_PATH="/opt/intel/mkl/lib/intel64:$LD_LIBRARY_PATH"
+ENV LD_LIBRARY_PATH="/opt/intel/mkl/lib/intel64:/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH"
 ENV OMP_NUM_THREADS=1
+ENV PATH="/usr/local/cuda-12.2/bin:$PATH"
 
 # 复制验证套件
 COPY tools/quantum_verification /opt/verification
