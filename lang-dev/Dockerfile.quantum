@@ -1,3 +1,4 @@
+# File: Dockerfile.quantum
 FROM ubuntu:22.04
 
 # Quantum工具链基础
@@ -7,21 +8,33 @@ RUN apt-get update && apt-get install -y \
     qiskit-symbex \
     python3.10 \
     qsharp \
-    libdilithium3
+    libdilithium3 \
+    libopenblas-dev \
+    intel-mkl-2020.3-102 \
+    cython \
+    onnxruntime \
+    locust \
+    prometheus
 
 # 量子开发环境配置
 ENV QISKIT_IBM_TOKEN="YOUR_API_TOKEN"
 ENV QSHARP_PACKAGES="/opt/qsharp-packages"
+ENV LD_LIBRARY_PATH="/opt/intel/mkl/lib/intel64:$LD_LIBRARY_PATH"
 
 # 安装验证工具
 RUN pip3 install \
     qiskit==0.43.0 \
     qiskit-aer==0.12.1 \
-    tensorflow-quantum==1.0.0
+    tensorflow-quantum==1.0.0 \
+    onnxruntime==1.15.0 \
+    protoactor==2.3.1 \
+    locust==2.15.1 \
+    cython==3.0.0
 
 # 复制验证套件
 COPY tools/quantum_verification /opt/verification
 COPY contracts /opt/contracts
+COPY phase4 /opt/phase4
 
 WORKDIR /workspace
 CMD ["/bin/bash"]

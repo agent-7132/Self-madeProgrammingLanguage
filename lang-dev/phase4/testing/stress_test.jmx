@@ -1,0 +1,20 @@
+<TestPlan>
+  <ThreadGroup>
+    <name>Quantum语法验证压测</name>
+    <num_threads>100</num_threads>
+    <ramp_time>10</ramp_time>
+    <LoopController>
+      <loops>1000</loops>
+    </LoopController>
+    <HTTPSampler>
+      <protocol>grpc</protocol>
+      <server>localhost:50051</server>
+      <method>SyntaxValidator/Validate</method>
+      <payload>${__FileToString(quantum_code.qs)}</payload>
+    </HTTPSampler>
+  </ThreadGroup>
+  <ResultCollector>
+    <name>聚合报告</name>
+    <filename>stress_report.csv</filename>
+  </ResultCollector>
+</TestPlan>
