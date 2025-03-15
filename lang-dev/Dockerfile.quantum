@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     cuda-toolkit-12-2 \
     nvidia-driver-535 \
     libcudnn8 \
+    libavx512f-dev \          # 新增SIMD支持
+    gcc-12-plugin-dev \       # 新增编译器插件
+    valgrind \                # 新增内存检测工具
     && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
     && echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" >> /etc/apt/sources.list.d/llvm.list \
     && apt-get update && apt-get install -y \
@@ -47,12 +50,13 @@ RUN pip3 install \
     pennylane \
     transformers
 
-# 配置环境变量
+# 配置环境变量（新增SIMD编译选项）
 ENV QISKIT_IBM_TOKEN="YOUR_API_TOKEN"
 ENV QSHARP_PACKAGES="/opt/qsharp-packages"
 ENV LD_LIBRARY_PATH="/opt/intel/mkl/lib/intel64:/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH"
 ENV OMP_NUM_THREADS=1
 ENV PATH="/usr/local/cuda-12.2/bin:$PATH"
+ENV CFLAGS='-march=native -O3'  # 新增编译优化标记
 
 # 复制验证套件
 COPY tools/quantum_verification /opt/verification

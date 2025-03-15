@@ -5,6 +5,7 @@ COMMENT_SYMBOLS = {
     '.py': '#',
     '.js': '//',
     '.c': '//',
+    '.h': '//',  # 新增对.h文件的支持
     '.sol': '//',
     '.yaml': '#',
     '.json': '//',
@@ -15,7 +16,7 @@ COMMENT_SYMBOLS = {
     '.sh': '#',
     '.txt': '#',
     '.md': '<!--',
-    '.sh': '#',
+    '.jmx': '//',  # 根据需求添加
 }
 
 DEFAULT_SYMBOL = '#'
@@ -40,45 +41,38 @@ def merge_files(root_dir):
         
         for filename in filenames:
             file_path = os.path.join(dirpath, filename)
-            rel_path = os.path.relpath(file_path, root_dir)
-            comment_symbol = get_comment_symbol(filename)
             
-            # 构建带注释的文件内容
+            # 跳过超过阈值的大文件
+            if os.path.getsize(file_path) > MAX_SIZE:
+                continue
+                
+            comment = get_comment_symbol(filename)
+            header = f"{comment} File: {filename}\n{comment}\n"
+            
             try:
-                with open(file_path, 'r', encoding='utf-8') as infile:
-                    content_block = (
-                        f"{comment_symbol} ==== {rel_path} ====\n"
-                        f"{infile.read()}\n\n"
-                    )
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
             except UnicodeDecodeError:
                 continue  # 跳过二进制文件
-            except Exception:
-                continue  # 跳过无权限文件
+                
+            entry = f"{header}{content}\n\n"
+            entry_size = len(entry.encode('utf-8'))
             
-            # 计算内容字节长度
-            content_bytes = content_block.encode('utf-8')
-            content_len = len(content_bytes)
-            
-            # 分卷控制逻辑
-            if current_output:
-                if current_size + content_len > MAX_SIZE:
+            # 需要创建新分卷的情况
+            if current_output is None or current_size + entry_size > MAX_SIZE:
+                if current_output is not None:
                     current_output.close()
-                    code_num += 1
-                    current_output = None
-            
-            if not current_output:
                 output_path = OUTPUT_TEMPLATE.format(code_num)
                 current_output = open(output_path, 'w', encoding='utf-8')
+                code_num += 1
                 current_size = 0
+                
+            # 写入内容
+            current_output.write(entry)
+            current_size += entry_size
             
-            # 写入内容并更新大小
-            current_output.write(content_block)
-            current_size += content_len
-    
-    # 关闭最后一个分卷文件
-    if current_output:
+    if current_output is not None:
         current_output.close()
 
-# 使用示例
 if __name__ == '__main__':
-    merge_files('.')  # 合并当前目录
+    merge_files('.')

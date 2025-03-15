@@ -1,0 +1,37 @@
+stages:
+  - build
+  - test
+  - deploy
+
+build_image:
+  stage: build
+  script:
+    - docker build -t quantum-env -f Dockerfile.quantum .
+  tags:
+    - docker
+
+memory_test:
+  stage: test
+  script:
+    - apt-get update && apt-get install -y valgrind
+    - python3 tests/memory/valgrind_check.py ./build/qvm
+  artifacts:
+    reports:
+      junit: valgrind_report.xml
+  tags:
+    - memory
+
+wasm_test:
+  stage: test
+  script:
+    - emcc src/runtime/wasm/*.c -o wasm_build/app.wasm
+    - node wasm_startup_test.js
+  tags:
+    - wasm
+
+deploy_prod:
+  stage: deploy
+  script:
+    - kubectl apply -f k8s-deployment.yaml
+  only:
+    - master
