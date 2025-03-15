@@ -3,10 +3,12 @@ federation:
   nodes:
     - address: 192.168.1.101:50051
       role: coordinator
-      shard_range: 0-511
+      shard_range: [0, 511]
+      security_level: 3
     - address: 192.168.1.102:50051  
       role: worker
-      shard_range: 512-1023
+      shard_range: [512, 1023]
+      security_level: 2
 
 training:
   batch_size: 256
@@ -24,3 +26,4 @@ model:
     num_layers: 12
     hidden_size: 768
     attention_heads: 12
+    vocab_size: 50000

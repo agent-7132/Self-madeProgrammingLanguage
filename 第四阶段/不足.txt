@@ -46,3 +46,48 @@
 6. 添加缺失的模块依赖和类型定义。
 
 这些问题的存在表明代码在功能完整性、逻辑正确性和依赖管理方面需要进一步优化和验证。
+当前项目目录树
+.../files/lang-dev $ tree
+.
+├── Dockerfile.quantum
+├── ai_assist
+│   ├── code_completion
+│   │   ├── prompt_engine.json
+│   │   └── transformer_finetune.py
+│   └── type_inference
+│       ├── inference_service.py
+│       ├── model.onnx导出.py
+│       └── 请导出model.onnx（说明）
+├── benchmarks
+│   ├── coremark_port.c
+│   └── wasm_startup_test.js
+├── contracts
+│   ├── Governance.sol
+│   ├── PackageRegistry.sol
+│   ├── QuantumDependencyResolver.sol
+│   └── llvm_qir_ext.ll
+├── phase1
+│   └── formal_verification
+│       ├── klee_test.sh
+│       └── memory_model.als
+├── phase2
+│   └── quantum
+│       ├── QuantumOptimizer.qs
+│       └── qpu_scheduler.py
+├── tools
+│   ├── circuit_visualizer.py
+│   ├── federated_learning
+│   │   ├── config.yaml
+│   │   ├── config_v2.yaml
+│   │   ├── config_validation.py
+│   │   ├── conflict_model_train.py
+│   │   └── quantum_aggregation.py
+│   ├── package
+│   │   └── quantum_dependency.v
+│   ├── quantum_verification
+│   │   └── shor_validation.py
+│   ├── resource_estimator.py
+│   └── security
+│       └── quantum_security.py
+└── validation
+    └── hybrid_validation.yaml

@@ -1,9 +1,14 @@
 namespace Lang.QuantumOptimizer {
   open Microsoft.Quantum.Intrinsic;
   open Microsoft.Quantum.Canon;
-  open Microsoft.Quantum.Optimization;
   open Microsoft.Quantum.Diagnostics;
   open Microsoft.Quantum.Math;
+  open Microsoft.Quantum.Convert;
+
+  struct Coupling {
+    Control: Int;
+    Target: Int;
+  }
 
   operation GetTopology(qubits : Qubit[]) : Topology {
     mutable topology = [];
@@ -21,18 +26,19 @@ namespace Lang.QuantumOptimizer {
   }
 
   operation MeasureDecoherence(qubits : Qubit[], samples : Int) : Double {
-    mutable errorRate = 0.0;
-    for _ in 1..samples {
-      using (ancilla = Qubit()) {
-        H(ancilla);
-        for q in qubits {
-          CNOT(q, ancilla);
-        }
-        let result = M(ancilla);
-        set errorRate += result == Zero ? 0.0 | 1.0;
-      }
+    use register = Qubit[2];
+    ApplyPauliMeasurement([PauliX, PauliY, PauliZ], qubits, register);
+    let fidelity = CalculateFidelity(register);
+    ResetAll(register);
+    return fidelity;
+  }
+
+  operation CalculateFidelity(register : Qubit[]) : Double {
+    mutable sum = 0.0;
+    for state in [Zero, One] {
+      set sum += Probability([state], register);
     }
-    return 1.0 - errorRate / IntAsDouble(samples);
+    return sum / 2.0;
   }
 
   operation OptimizeTypeGraph(qubits : Qubit[], adjacencyMatrix : Double[][]) : Double {
