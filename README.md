@@ -15,8 +15,8 @@
 
  开发环境配置
 
- Docker 快速启动 (推荐)bash
-docker build -t quantumlang -f Dockerfile.quantum .
+ Docker 快速启动 (推荐)
+bash docker build -t quantumlang -f Dockerfile.quantum .
 docker run -it --cpus 4 --memory 8g quantumlang
 手动安装bash
  基础工具链
