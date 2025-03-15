@@ -1,16 +1,23 @@
+# ==== Dockerfile.quantum ====
 FROM ubuntu:22.04
 
 # Quantum工具链基础
 RUN apt-get update && apt-get install -y \
-    clang-15 \
-    llvm-15 \
+    wget \
+    gnupg \
+    software-properties-common \
+    && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
+    && echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" >> /etc/apt/sources.list.d/llvm.list \
+    && apt-get update && apt-get install -y \
+    clang-18 \
+    llvm-18 \
     qiskit-symbex \
     python3.10 \
     qsharp \
     libdilithium3 \
     libopenblas-dev \
     openmpi-bin libopenmpi-dev \
-    intel-mkl-2020.3-102 \
+    intel-mkl-2023.2 \
     cython \
     onnxruntime \
     locust \
@@ -29,7 +36,10 @@ RUN pip3 install \
     cython==3.0.0 \
     numba==0.57.0 \
     mpi4py==3.1.4 \
-    py-cpuinfo==9.0.0
+    py-cpuinfo==9.0.0 \
+    torch \
+    pennylane \
+    transformers
 
 # 量子开发环境配置
 ENV QISKIT_IBM_TOKEN="YOUR_API_TOKEN"

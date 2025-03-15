@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-qiskit-symbex --llvm phase1/formal_verification/memory_model.als \
+qiskit-symbex --hybrid phase1/formal_verification/memory_model.als \
+  --quantum-backend ibmq_qasm_sim \
+  --classic-solver z3 \
   --output phase1/formal_verification/generated_model.c
 
 clang -emit-llvm -c -DQUANTUM_EXTENSION \

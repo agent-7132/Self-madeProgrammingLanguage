@@ -1,0 +1,19 @@
+precision_monitor:
+  fp16:
+    error_threshold: 1e-3
+    fallback_policy: auto_upcast_to_fp32
+  bfloat16:
+    hardware_accelerated: [AMX, TensorCore]
+    stability_check: gradient_norm < 0.5
+  fp32:
+    monitoring: enabled
+  fp64:
+    monitoring: enabled_on_demand
+
+error_handling:
+  on_threshold_breach: log_and_switch_precision
+  max_allowed_error: 0.01%
+
+hardware_settings:
+  preferred_accelerators: [AMX, AVX512]
+  fallback_order: [AMX, AVX512, AVX2]
