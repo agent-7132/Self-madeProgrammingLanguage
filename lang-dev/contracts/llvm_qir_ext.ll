@@ -1,3 +1,4 @@
+; 扩展优化策略（完整实现）
 define void @qcuo_optimizer_v2(%Module* M) {
   %quantum_feature = call double @quantum_feature_detection(M)
   %classic_feature = call double @ml_classic_feature(M)
@@ -22,6 +23,7 @@ classic_assisted:
 hybrid_parallel:
   call void @hybrid_pipeline_parallel(M)
   call void @quantum_memory_prefetch(M)
+  call void @llvm.qir.optimize(%Module* M, strategy="hybrid")  ; 新增混合优化
   br label %verify
 
 verify:
@@ -29,3 +31,8 @@ verify:
   call void @cross_platform_verify(M)
   ret void
 }
+
+; 保持原有辅助函数不变
+declare double @quantum_feature_detection(%Module*)
+declare double @ml_classic_feature(%Module*)
+declare i32 @dynamic_strategy_selector(double, double)

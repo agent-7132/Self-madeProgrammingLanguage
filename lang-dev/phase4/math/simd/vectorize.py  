@@ -1,0 +1,22 @@
+import numba
+import numpy as np
+
+class SIMDProcessor:
+    @staticmethod
+    @numba.vectorize(['float32(complex64)'], target='avx1024')
+    def avx1024_prob(x):
+        return x.real**2 + x.imag**2
+
+    @staticmethod
+    def quantize_block(data: np.ndarray, bits: int = 4) -> np.ndarray:
+        """SIMD加速的量化函数"""
+        scale = 2**bits - 1
+        return np.round(data * scale) / scale
+
+def vectorize(backend: str = 'avx1024'):
+    """向量化装饰器工厂函数"""
+    def decorator(func):
+        if backend == 'avx1024':
+            return numba.vectorize(['float32(complex64)'], target='avx1024')(func)
+        return func
+    return decorator

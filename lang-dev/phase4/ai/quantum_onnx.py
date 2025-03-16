@@ -1,7 +1,9 @@
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import QuantumConvolution
 import onnxruntime
+import numpy as np
 from typing import Dict, Any
+from math.simd import vectorize  # 新增SIMD模块
 
 class QuantumOpKernel:
     def __init__(self, provider: str = 'qiskit'):
@@ -47,6 +49,7 @@ class QuantumOpKernel:
         statevector = result.get_statevector()
         return self._postprocess(statevector)
 
+    @vectorize(backend='avx1024')  # 应用向量化装饰器
     def _postprocess(self, statevector: np.ndarray) -> np.ndarray:
         """将量子态转换为经典数据"""
         return np.abs(statevector)**2
