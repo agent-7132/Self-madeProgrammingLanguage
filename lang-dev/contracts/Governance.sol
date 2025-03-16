@@ -9,15 +9,22 @@ contract LanguageDAO {
         uint256 voteEnd;
         uint256 yesVotes;
         uint256 noVotes;
-        mapping(address => bool) hasVoted;
     }
     
     mapping(uint256 => Proposal) public proposals;
+    mapping(uint256 => mapping(address => bool)) public hasVoted;
     uint256 public proposalCount;
     bytes32 public merkleRoot;
     
     constructor(bytes32 _merkleRoot) {
         merkleRoot = _merkleRoot;
+        proposals[0] = Proposal({
+            proposalHash: bytes32(0),
+            voteStart: 0,
+            voteEnd: 0,
+            yesVotes: 0,
+            noVotes: 0
+        });
     }
     
     function submitProposal(
@@ -38,11 +45,11 @@ contract LanguageDAO {
     function vote(uint256 proposalId, bool support) external {
         Proposal storage p = proposals[proposalId];
         require(block.timestamp < p.voteEnd, "Voting ended");
-        require(!p.hasVoted[msg.sender], "Already voted");
+        require(!hasVoted[proposalId][msg.sender], "Already voted");
         
         if(support) p.yesVotes += 1;
         else p.noVotes += 1;
-        p.hasVoted[msg.sender] = true;
+        hasVoted[proposalId][msg.sender] = true;
     }
     
     function verifyProof(

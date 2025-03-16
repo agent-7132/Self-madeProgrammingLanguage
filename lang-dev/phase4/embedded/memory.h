@@ -20,5 +20,7 @@ inline void* malloc_embedded(size_t size) {
 
 inline void free_embedded(void* ptr) {}
 
+#ifdef EMBEDDED
 #define malloc(size) malloc_embedded(size)
-#define free(ptr) free_embedded(ptr)
+#define free(ptr) ((void)0)
+#endif

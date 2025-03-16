@@ -6,12 +6,19 @@
     <LoopController>
       <loops>1000</loops>
     </LoopController>
-    <HTTPSampler>
-      <protocol>grpc</protocol>
-      <server>localhost:50051</server>
-      <method>SyntaxValidator/Validate</method>
-      <payload>${__FileToString(quantum_code.qs)}</payload>
-    </HTTPSampler>
+    <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="gRPC Request">
+      <elementProp name="GRPC" elementType="GRPC">
+        <protocol>grpc</protocol>
+        <serverName>localhost</serverName>
+        <port>50051</port>
+        <method>SyntaxValidator/Validate</method>
+        <metadata>
+          <key>content-type</key>
+          <value>application/grpc</value>
+        </metadata>
+        <payload>${__FileToString(quantum_code.qs)}</payload>
+      </elementProp>
+    </HTTPSamplerProxy>
   </ThreadGroup>
   <ResultCollector>
     <name>聚合报告</name>

@@ -1,3 +1,4 @@
+// File: arduino_runtime.c
 #include <stdint.h>
 #include <avr/pgmspace.h>
 #include <avr/interrupt.h>
@@ -13,9 +14,7 @@ void* qc_malloc(size_t size) {
     return ptr;
 }
 
-void qc_free(void* ptr) {
-    // 无自动回收的静态分配
-}
+void qc_free(void* ptr) {}
 
 __attribute__((naked)) 
 void _start() {
@@ -30,7 +29,18 @@ void _start() {
     );
 }
 
-// 精简版内存操作函数
+#ifdef __AVR__
+#include <avr/io.h>
+void quantum_gate(uint8_t pin) {
+    DDRB |= (1 << pin);   // 直接寄存器操作
+    PORTB ^= (1 << pin);  // 替换通用GPIO库
+}
+#else
+void quantum_gate(int pin, float angle) {
+    // 其他平台实现
+}
+#endif
+
 void* memset(void* s, int c, size_t n) {
     uint8_t* p = (uint8_t*)s;
     while(n--) *p++ = c;

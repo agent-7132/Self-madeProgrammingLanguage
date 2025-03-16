@@ -1,0 +1,602 @@
+# File: quantum_debugger.py
+#
+import socket
+import struct
+from qiskit import QuantumCircuit
+
+class JTAGQVMDebugger:
+    def __init__(self, ip="192.168.1.100", port=12345):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((ip, port))
+    
+    def capture_statevector(self, circuit: QuantumCircuit):
+        # 发送调试命令
+        cmd = struct.pack('!B', 0x01)  # 捕获状态命令
+        self.sock.sendall(cmd)
+        
+        # 接收量子态数据
+        raw_data = self.sock.recv(16 * 1024)
+        return self._parse_statevector(raw_data)
+    
+    def _parse_statevector(self, data):
+        state = {}
+        for i in range(0, len(data), 12):
+            idx, real, imag = struct.unpack('!Iff', data[i:i+12])
+            state[idx] = complex(real, imag)
+        return state
+    
+    def set_breakpoint(self, qubit: int, condition: str):
+        cmd = struct.pack('!BI', 0x02, qubit) + condition.encode()
+        self.sock.sendall(cmd)
+    
+    def single_step(self):
+        cmd = struct.pack('!B', 0x03)
+        self.sock.sendall(cmd)
+        return self.capture_statevector()
+
+
+# File: onnx_integration.py
+#
+import onnxruntime as ort
+import numpy as np
+
+class QuantumAIModel:
+    def __init__(self, model_path):
+        self.session = ort.InferenceSession(model_path)
+        self.io_binding = self.session.io_binding()
+    
+    def infer(self, tensor_input: np.ndarray):
+        """执行量子增强的模型推理"""
+        self.io_binding.bind_cpu_input('input', tensor_input)
+        self.io_binding.bind_output('output')
+        self.session.run_with_iobinding(self.io_binding)
+        return self.io_binding.copy_outputs_to_cpu()[0]
+
+    @staticmethod
+    def quantize_model(model_path):
+        """模型量子化压缩"""
+        from onnxruntime.quantization import quantize_dynamic
+        quantize_dynamic(model_path, model_path.replace('.onnx', '_quant.onnx'))
+
+
+# File: quantum_onnx.py
+#
+from qiskit import QuantumCircuit
+from qiskit.circuit.library import QuantumConvolution
+import onnxruntime
+import numpy as np
+from typing import Dict, Any
+from math.simd import vectorize  # 新增SIMD模块
+
+class QuantumOpKernel:
+    def __init__(self, provider: str = 'qiskit'):
+        self.provider = provider
+        self.backend = self._init_backend(provider)
+        self.compiled_gates: Dict[str, Any] = {}
+    
+    def _init_backend(self, provider):
+        if provider == 'qiskit':
+            from qiskit import Aer
+            return Aer.get_backend('aer_simulator_statevector')
+        raise ValueError(f"Unsupported provider: {provider}")
+
+    def bind(self, node_proto):
+        """将ONNX节点绑定到量子操作"""
+        if node_proto.op_type == "QuantumConv":
+            return self._compile_qiskit_conv(node_proto)
+        elif node_proto.op_type == "QuantumPool":
+            return self._compile_qiskit_pool(node_proto)
+        raise NotImplementedError(f"Operation {node_proto.op_type} not supported")
+
+    def _compile_qiskit_conv(self, node_proto):
+        """编译量子卷积层"""
+        qubits = node_proto.attribute[0].i
+        depth = node_proto.attribute[1].i if len(node_proto.attribute) > 1 else 3
+        
+        qc = QuantumCircuit(qubits)
+        for _ in range(depth):
+            qc.append(QuantumConvolution(qubits), range(qubits))
+            qc.barrier()
+        
+        gate = qc.to_gate(label="QuantumConv")
+        self.compiled_gates[node_proto.name] = gate
+        return gate
+
+    def execute(self, gate_name: str, inputs: np.ndarray) -> np.ndarray:
+        """执行量子操作"""
+        qc = QuantumCircuit(self.compiled_gates[gate_name].num_qubits)
+        qc.append(self.compiled_gates[gate_name], qc.qubits)
+        qc.save_statevector()
+        
+        result = self.backend.run(qc, shots=1024).result()
+        statevector = result.get_statevector()
+        return self._postprocess(statevector)
+
+    @vectorize(backend='avx1024')  # 应用向量化装饰器
+    def _postprocess(self, statevector: np.ndarray) -> np.ndarray:
+        """将量子态转换为经典数据"""
+        return np.abs(statevector)**2
+
+class QuantumONNXRuntime:
+    def __init__(self, model_path: str):
+        self.session = onnxruntime.InferenceSession(
+            model_path,
+            providers=['QuantumExecutionProvider']
+        )
+        self.quantum_kernels = {
+            node.name: QuantumOpKernel() 
+            for node in self.session.get_modelmeta().custom_metadata 
+            if node.domain == 'quantum'
+        }
+
+    def infer(self, inputs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        """混合量子-经典推理"""
+        for name, kernel in self.quantum_kernels.items():
+            inputs[name] = kernel.execute(name, inputs[name])
+        
+        return self.session.run(
+            output_names=None,
+            inputs=inputs
+        )
+
+
+// File: stress_test.jmx
+//
+<TestPlan>
+  <ThreadGroup>
+    <name>Quantum语法验证压测</name>
+    <num_threads>100</num_threads>
+    <ramp_time>10</ramp_time>
+    <LoopController>
+      <loops>1000</loops>
+    </LoopController>
+    <HTTPSampler>
+      <protocol>grpc</protocol>
+      <server>localhost:50051</server>
+      <method>SyntaxValidator/Validate</method>
+      <payload>${__FileToString(quantum_code.qs)}</payload>
+    </HTTPSampler>
+  </ThreadGroup>
+  <ResultCollector>
+    <name>聚合报告</name>
+    <filename>stress_report.csv</filename>
+  </ResultCollector>
+</TestPlan>
+
+
+# File: chaos_injector.py
+#
+import random
+import subprocess
+import time
+
+FAILURE_TYPES = {
+    'network': lambda: subprocess.run(["iptables", "-A", "INPUT", "-p", "tcp", "--dport", "50051", "-j", "DROP"]),
+    'process': lambda: subprocess.run(["pkill", "-9", "qpu_scheduler"]),
+    'memory': lambda: subprocess.run(["stress-ng", "--vm", "2", "--vm-bytes", "2G", "-t", "60s"])
+}
+
+def inject_failure(duration=3600, interval=60):
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        failure = random.choice(list(FAILURE_TYPES.keys()))
+        FAILURE_TYPES[failure]()
+        time.sleep(interval)
+
+
+// File: rpi_runtime.c
+//
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <wiringPi.h>
+
+typedef struct {
+    uint8_t* base;
+    size_t size;
+} MemoryBlock;
+
+MemoryBlock allocate_manual(size_t size) {
+    MemoryBlock block;
+    block.base = (uint8_t*)malloc(size);
+    if(block.base == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+    block.size = size;
+    return block;
+}
+
+void free_manual(MemoryBlock block) {
+    free(block.base);
+    block.base = NULL;
+    block.size = 0;
+}
+
+void quantum_gate(int pin, float angle) {
+    if (wiringPiSetup() == -1) {
+        fprintf(stderr, "GPIO初始化失败\n");
+        return;
+    }
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, (angle > 0.5f) ? HIGH : LOW);
+}
+
+int check_memory_safety(MemoryBlock block) {
+    return (block.base != NULL) && (block.size > 0);
+}
+
+// 测试用例
+int main() {
+    MemoryBlock mem = allocate_manual(1024);
+    if(check_memory_safety(mem)) {
+        printf("内存分配成功\n");
+        quantum_gate(17, 0.6f);
+    }
+    free_manual(mem);
+    return 0;
+}
+
+
+// File: memory.h
+//
+#pragma once
+#include <stdint.h>
+#include <stddef.h>
+
+#define NO_GC
+#define ARENA_SIZE (256 * 1024)
+
+static uint8_t memory_arena[ARENA_SIZE];
+static size_t memory_watermark = 0;
+
+inline void* malloc_embedded(size_t size) {
+    size = (size + 7) & ~7;
+    if (memory_watermark + size > ARENA_SIZE) {
+        return NULL;
+    }
+    void* ptr = &memory_arena[memory_watermark];
+    memory_watermark += size;
+    return ptr;
+}
+
+inline void free_embedded(void* ptr) {}
+
+#define malloc(size) malloc_embedded(size)
+#define free(ptr) free_embedded(ptr)
+
+
+// File: jtag_qvm.c
+//
+#include <stdint.h>
+#include "memory.h"
+#include "memory/memcheck.h"  // 新增安全检查
+
+#define QVM_DEBUG_PORT 0x10000000
+volatile uint32_t* debug_port = (uint32_t*)QVM_DEBUG_PORT;
+
+void quantum_state_dump(uint32_t qubit_mask) {
+  MEMCHECK_ALLOC(8);  // 内存安全检查
+  uint64_t* state_ptr = (uint64_t*)malloc_embedded(8);
+  assert(check_memory_safety((MemoryBlock){state_ptr,8}));
+  
+  *debug_port = 0x1;
+  asm volatile("fence");
+  while ((*debug_port & 0x80000000) == 0);
+  uint32_t state_hi = *(debug_port + 1);
+  uint32_t state_lo = *(debug_port + 2);
+  *state_ptr = ((uint64_t)state_hi << 32) | state_lo;
+}
+
+// 保持原有单量子探针实现不变
+#pragma GCC push_options
+#pragma GCC optimize("O0")
+void single_qubit_probe(uint8_t qubit_id) {
+  *debug_port = 0x2 | (qubit_id << 8);
+  asm volatile("fence.i");
+  for (volatile int i = 0; i < 100; ++i);
+}
+#pragma GCC pop_options
+
+
+// File: memcheck.h
+//
+#pragma once
+#include <stddef.h>
+
+typedef struct {
+    void* base;
+    size_t size;
+} MemoryBlock;
+
+#define MEMCHECK_ALLOC(size) \
+    do { \
+        if (memory_watermark + (size) > ARENA_SIZE) { \
+            abort(); \
+        } \
+    } while(0)
+
+inline int check_memory_safety(MemoryBlock block) {
+    return (block.base != NULL) && 
+           ((uintptr_t)block.base >= (uintptr_t)memory_arena) &&
+           ((uintptr_t)block.base + block.size <= (uintptr_t)memory_arena + ARENA_SIZE);
+}
+
+
+# File: hybrid_scheduler.py
+#
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+import logging
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+from qiskit.quantum_info import entanglement  # 新增纠缠度计算
+from perf.hybrid_profiler import HybridProfiler  # 新增性能分析
+from memory.memcheck import MEMCHECK_ALLOC
+
+logger = logging.getLogger('HybridScheduler')
+
+class HybridScheduler:
+    def __init__(self):
+        self.quantum_queue = []
+        self.classic_queue = []
+        self.executor = ThreadPoolExecutor(max_workers=8)
+
+    def _schedule_quantum(self):
+        """量子任务调度（新增纠缠度优先级）"""
+        # 根据纠缠度调整优先级
+        for task in self.quantum_queue:
+            ent = entanglement(task.qubits)
+            task.priority = ent * 100  # 纠缠度越高优先级越高
+        self.quantum_queue.sort(key=lambda x: x.priority, reverse=True)
+
+    def _execute_tasks(self):
+        """执行任务（保持原逻辑不变）"""
+        while self.quantum_queue or self.classic_queue:
+            if self.quantum_queue:
+                task = self.quantum_queue.pop(0)
+                self._run_quantum_task(task)
+            if self.classic_queue:
+                task = self.classic_queue.pop(0)
+                self._run_classic_task(task)
+
+    def run(self):
+        """启动调度器（新增性能分析）"""
+        with HybridProfiler(track_quantum=True):  # 启动混合性能分析
+            self._execute_tasks()
+
+    # 以下保持原有方法不变
+    def _run_quantum_task(self, task):
+        MEMCHECK_ALLOC(task.memory_required)
+        sim = AerSimulator()
+        transpiled = transpile(task.circuit, sim)
+        result = sim.run(transpiled).result()
+        task.callback(result)
+
+    def _run_classic_task(self, task):
+        future = self.executor.submit(task.function, *task.args)
+        future.add_done_callback(task.callback)
+
+class ErrorMonitor:
+    """错误监控模块（保持原有实现）"""
+    def __init__(self):
+        self.error_log = []
+
+
+# File: actor-system.py
+#
+from protoactor import SupervisorActor
+import numpy as np
+import time
+
+class QuantumAwareSupervisor(SupervisorActor):
+    async def receive(self, ctx):
+        if isinstance(ctx.message, dict) and 'type' in ctx.message:
+            if ctx.message['type'] == 'QuantumDecoherenceAlert':
+                ctx.restart_actor_with(ctx.actor, 
+                    state=self.snapshot_recovery(ctx.actor))
+            
+    def snapshot_recovery(self, actor):
+        return {
+            'quantum_state': actor.state.get('quantum_state', np.zeros(2)),
+            'classical_state': actor.state.get('last_stable_checkpoint', 0)
+        }
+
+class ResilientMailbox:
+    def __init__(self):
+        self.pending = []
+        self.retry_policy = ExponentialBackoffRetry()
+        
+    def deliver(self, msg):
+        try:
+            checksum = self.calculate_quantum_checksum(msg)
+            if self.verify_integrity(checksum):
+                return super().deliver(msg)
+        except Exception as e:
+            self.retry_policy.handle(msg)
+
+    def calculate_quantum_checksum(self, msg):
+        state = np.array([1, 0])
+        for _ in range(4):
+            state = np.kron(state, state)
+        return np.sum(np.abs(state))
+
+class ExponentialBackoffRetry:
+    def __init__(self):
+        self.max_retries = 5
+        self.current_retry = 0
+
+    def handle(self, msg):
+        if self.current_retry < self.max_retries:
+            time.sleep(2 ** self.current_retry)
+            self.current_retry += 1
+            return True
+        return False
+
+
+# File: system.py
+#
+from protoactor import Actor, ActorContext, RootContext, Props
+import numpy as np
+from ..math.gpu_quantum_ops import HybridGPUQuantum
+
+class TensorShard:
+    def __init__(self, data: np.ndarray, weights: np.ndarray, shard_id: int):
+        self.data = data
+        self.weights = weights
+        self.shard_id = shard_id
+
+class ProcessedShard:
+    def __init__(self, data: np.ndarray, shard_id: int):
+        self.data = data
+        self.shard_id = shard_id
+
+class QuantumTaskActor(Actor):
+    async def receive(self, context: ActorContext):
+        if isinstance(context.message, dict):
+            if 'matrix' in context.message and 'other_matrix' in context.message:
+                result = HybridGPUQuantum.quantum_guided_gemm(
+                    context.message['matrix'], 
+                    context.message['other_matrix']
+                )
+                context.respond({'result': result, 'task_id': context.message.get('task_id')})
+
+class TensorShardActor(Actor):
+    def __init__(self):
+        self.accumulator = None
+        
+    async def receive(self, context: ActorContext):
+        if isinstance(context.message, TensorShard):
+            shard = context.message
+            processed = HybridGPUQuantum.hybrid_precision_gemm(shard.data, shard.weights)
+            context.send(context.parent, ProcessedShard(processed, shard.shard_id))
+
+class CoordinatorActor(Actor):
+    def __init__(self):
+        self.received_shards = {}
+        self.expected_shards = 0
+        
+    async def receive(self, context: ActorContext):
+        if isinstance(context.message, ProcessedShard):
+            shard = context.message
+            self.received_shards[shard.shard_id] = shard.data
+            if len(self.received_shards) == self.expected_shards:
+                aggregated = self._aggregate_shards()
+                context.respond(aggregated)
+                
+        elif isinstance(context.message, int):
+            self.expected_shards = context.message
+            
+    def _aggregate_shards(self) -> np.ndarray:
+        sorted_shards = [self.received_shards[k] for k in sorted(self.received_shards)]
+        return np.concatenate(sorted_shards, axis=1)
+
+class ActorSystem:
+    def __init__(self):
+        self.root = RootContext()
+        self.shard_actor = self.root.spawn(Props(TensorShardActor))
+        self.coordinator = self.root.spawn(Props(CoordinatorActor))
+        
+    def distribute_task(self, tensor: np.ndarray, weights: np.ndarray, num_shards: int):
+        shards = np.split(tensor, num_shards, axis=0)
+        self.coordinator.tell(num_shards)
+        
+        for i, shard in enumerate(shards):
+            task = TensorShard(shard, weights, i)
+            self.root.send(self.shard_actor, task)
+            
+    def get_result(self, timeout: float = 5.0) -> np.ndarray:
+        return self.root.request_future(self.coordinator, None, timeout).result()
+
+
+# File: hybrid_verify.sh
+#
+#!/bin/bash
+set -e
+
+# 混合符号执行验证
+qiskit-symbex --hybrid phase4/verification/hybrid_model.als \
+  --quantum-backend aer_simulator \
+  --classic-solver z3 \
+  --output generated/hybrid_verification.c
+
+# 编译为LLVM IR
+clang-18 -S -emit-llvm -o generated/hybrid_verification.ll \
+  -DQUANTUM_EXTENSION \
+  generated/hybrid_verification.c
+
+# 运行KLEEHybrid扩展
+klee --hybrid-mode=quantum-classic \
+  --quantum-simulator=qiskit \
+  --max-qubit=16 \
+  generated/hybrid_verification.ll \
+  --output-dir=klee-out-hybrid
+
+# 生成联合验证报告
+python3 analyze_hybrid.py klee-out-hybrid/ \
+  --quantum-metrics \
+  --classic-coverage \
+  --output=hybrid_verification.qvr
+
+
+// File: wasm_runtime.js
+//
+export class QuantumWASM {
+  constructor(module) {
+    this.memory = new WebAssembly.Memory({ initial: 256 });
+    this.instance = new WebAssembly.Instance(module, {
+      env: { 
+        quantum_malloc: (size) => this._malloc(size),
+        memory: this.memory 
+      }
+    });
+  }
+
+  _malloc(size) {
+    const ptr = this.memory.buffer.byteLength;
+    this.memory.grow(Math.ceil(size / 65536));
+    return ptr;
+  }
+}
+
+// 新增冷启动优化代码
+export const initWASMPool = () => {
+  const preAllocated = new ArrayBuffer(1024 * 1024);
+  WebAssembly.Memory.prototype.grow.call(this.memory, preAllocated);
+  console.log('Pre-allocated 1MB WASM memory pool');
+};
+
+
+# File: valgrind_check.py
+#
+import subprocess
+import sys
+
+def run_valgrind_check(binary_path):
+    try:
+        result = subprocess.run(
+            ["valgrind", "--leak-check=full", "--error-exitcode=1", binary_path],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        print("Valgrind Output:\n", result.stderr)
+        
+        if "ERROR SUMMARY: 0 errors" not in result.stderr:
+            raise AssertionError(f"内存泄漏检测失败:\n{result.stderr}")
+            
+        return True
+    except subprocess.TimeoutExpired:
+        print("Valgrind检测超时")
+        return False
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python valgrind_check.py <binary_path>")
+        sys.exit(1)
+        
+    success = run_valgrind_check(sys.argv[1])
+    sys.exit(0 if success else 1)
+
+

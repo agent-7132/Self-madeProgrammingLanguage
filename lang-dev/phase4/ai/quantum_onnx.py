@@ -1,9 +1,11 @@
+# File: quantum_onnx.py
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import QuantumConvolution
 import onnxruntime
 import numpy as np
 from typing import Dict, Any
-from math.simd import vectorize  # 新增SIMD模块
+from math.simd import vectorize  # 路径修正
+from scipy.linalg.blas import sgemm  # 新增MKL集成
 
 class QuantumOpKernel:
     def __init__(self, provider: str = 'qiskit'):
@@ -18,7 +20,6 @@ class QuantumOpKernel:
         raise ValueError(f"Unsupported provider: {provider}")
 
     def bind(self, node_proto):
-        """将ONNX节点绑定到量子操作"""
         if node_proto.op_type == "QuantumConv":
             return self._compile_qiskit_conv(node_proto)
         elif node_proto.op_type == "QuantumPool":
@@ -26,7 +27,6 @@ class QuantumOpKernel:
         raise NotImplementedError(f"Operation {node_proto.op_type} not supported")
 
     def _compile_qiskit_conv(self, node_proto):
-        """编译量子卷积层"""
         qubits = node_proto.attribute[0].i
         depth = node_proto.attribute[1].i if len(node_proto.attribute) > 1 else 3
         
@@ -40,7 +40,6 @@ class QuantumOpKernel:
         return gate
 
     def execute(self, gate_name: str, inputs: np.ndarray) -> np.ndarray:
-        """执行量子操作"""
         qc = QuantumCircuit(self.compiled_gates[gate_name].num_qubits)
         qc.append(self.compiled_gates[gate_name], qc.qubits)
         qc.save_statevector()
@@ -49,10 +48,12 @@ class QuantumOpKernel:
         statevector = result.get_statevector()
         return self._postprocess(statevector)
 
-    @vectorize(backend='avx1024')  # 应用向量化装饰器
+    @vectorize(backend='avx512')  # 替换为AVX512
     def _postprocess(self, statevector: np.ndarray) -> np.ndarray:
-        """将量子态转换为经典数据"""
-        return np.abs(statevector)**2
+        # 使用MKL加速的矩阵运算
+        real_part = np.array(statevector.real, dtype=np.float32)
+        imag_part = np.array(statevector.imag, dtype=np.float32)
+        return sgemm(alpha=1.0, a=real_part, b=imag_part, trans_b=True)
 
 class QuantumONNXRuntime:
     def __init__(self, model_path: str):
@@ -67,7 +68,6 @@ class QuantumONNXRuntime:
         }
 
     def infer(self, inputs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        """混合量子-经典推理"""
         for name, kernel in self.quantum_kernels.items():
             inputs[name] = kernel.execute(name, inputs[name])
         
