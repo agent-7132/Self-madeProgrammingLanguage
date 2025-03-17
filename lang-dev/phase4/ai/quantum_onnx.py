@@ -1,11 +1,11 @@
-# File: quantum_onnx.py
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import QuantumConvolution
 import onnxruntime
 import numpy as np
 from typing import Dict, Any
-from math.simd import vectorize  # 路径修正
-from scipy.linalg.blas import sgemm  # 新增MKL集成
+from math.simd import vectorize
+from scipy.linalg.blas import sgemm
+from intel_extension_for_pytorch import optimize
 
 class QuantumOpKernel:
     def __init__(self, provider: str = 'qiskit'):
@@ -39,27 +39,19 @@ class QuantumOpKernel:
         self.compiled_gates[node_proto.name] = gate
         return gate
 
-    def execute(self, gate_name: str, inputs: np.ndarray) -> np.ndarray:
-        qc = QuantumCircuit(self.compiled_gates[gate_name].num_qubits)
-        qc.append(self.compiled_gates[gate_name], qc.qubits)
-        qc.save_statevector()
-        
-        result = self.backend.run(qc, shots=1024).result()
-        statevector = result.get_statevector()
-        return self._postprocess(statevector)
-
-    @vectorize(backend='avx512')  # 替换为AVX512
+    @vectorize(backend='avx512')
     def _postprocess(self, statevector: np.ndarray) -> np.ndarray:
-        # 使用MKL加速的矩阵运算
         real_part = np.array(statevector.real, dtype=np.float32)
         imag_part = np.array(statevector.imag, dtype=np.float32)
         return sgemm(alpha=1.0, a=real_part, b=imag_part, trans_b=True)
 
 class QuantumONNXRuntime:
     def __init__(self, model_path: str):
+        optimize()  # Intel MKL优化
         self.session = onnxruntime.InferenceSession(
             model_path,
-            providers=['QuantumExecutionProvider']
+            providers=['QuantumExecutionProvider'],
+            provider_options=[{'device_type': 'GPU'}]
         )
         self.quantum_kernels = {
             node.name: QuantumOpKernel() 

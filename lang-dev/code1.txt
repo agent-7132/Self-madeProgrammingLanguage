@@ -2,7 +2,6 @@
 #
 FROM nvidia/cuda:12.2.0-base-ubuntu22.04
 
-# 基础工具链
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -10,10 +9,10 @@ RUN apt-get update && apt-get install -y \
     cuda-toolkit-12-2 \
     nvidia-driver-535 \
     libcudnn8 \
-    libavx1024-dev \          # 替换为AVX1024
-    gcc-12-plugin-dev \       # 编译器插件
-    valgrind \                # 内存检测
-    python3.10-dev \          # 新增Python头文件
+    libavx512-dev \          # AVX1024替换为AVX512
+    gcc-12-plugin-dev \
+    valgrind \
+    python3.10-dev \
     && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
     && echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" >> /etc/apt/sources.list.d/llvm.list \
     && apt-get update && apt-get install -y \
@@ -32,11 +31,9 @@ RUN apt-get update && apt-get install -y \
     hwloc \
     numactl
 
-# 新增Cholesky分解库
 RUN git clone https://github.com/quantum-math/cholesky-cuda \
     && cd cholesky-cuda && make install
 
-# Python依赖（新增numba）
 RUN pip3 install \
     qiskit==0.43.0 \
     qiskit-aer==0.12.1 \
@@ -49,22 +46,20 @@ RUN pip3 install \
     protoactor==2.3.1 \
     locust==2.15.1 \
     cython==3.0.0 \
-    numba==0.57.0 \          # 新增SIMD向量化依赖
+    numba==0.57.0 \
     mpi4py==3.1.4 \
     py-cpuinfo==9.0.0 \
     pennylane \
     transformers
 
-# 环境变量
 ENV QISKIT_IBM_TOKEN="YOUR_API_TOKEN"
 ENV QSHARP_PACKAGES="/opt/qsharp-packages"
 ENV LD_LIBRARY_PATH="/opt/intel/mkl/lib/intel64:/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH"
 ENV OMP_NUM_THREADS=1
 ENV PATH="/usr/local/cuda-12.2/bin:$PATH"
-ENV CFLAGS='-march=native -O3 -mavx1024'  # 强制启用AVX1024
-ENV PYTHONPATH="/phase4/math:$PYTHONPATH"  # 新增SIMD模块路径
+ENV CFLAGS='-march=native -O3 -mavx512f'  # 替换为AVX512
+ENV PYTHONPATH="/phase4/math:$PYTHONPATH"
 
-# 复制项目文件（关键！确保SIMD模块路径正确）
 COPY . /phase4
 WORKDIR /workspace
 

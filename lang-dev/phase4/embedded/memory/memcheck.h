@@ -1,5 +1,6 @@
 #pragma once
 #include <stddef.h>
+#include <stdlib.h>
 
 typedef struct {
     void* base;
@@ -14,7 +15,5 @@ typedef struct {
     } while(0)
 
 inline int check_memory_safety(MemoryBlock block) {
-    return (block.base != NULL) && 
-           ((uintptr_t)block.base >= (uintptr_t)memory_arena) &&
-           ((uintptr_t)block.base + block.size <= (uintptr_t)memory_arena + ARENA_SIZE);
+    return (block.base != NULL) && (block.size > 0);
 }

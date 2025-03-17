@@ -1,6 +1,7 @@
 stages:
   - build
   - test
+  - verify
   - deploy
 
 build_image:
@@ -9,6 +10,14 @@ build_image:
     - docker build -t quantum-env -f Dockerfile.quantum .
   tags:
     - docker
+
+unit_test:
+  stage: test
+  script:
+    - python3 -m pytest tests/unit --junitxml=unit_report.xml
+  artifacts:
+    reports:
+      junit: unit_report.xml
 
 memory_test:
   stage: test
@@ -28,6 +37,15 @@ wasm_test:
     - node wasm_startup_test.js
   tags:
     - wasm
+
+formal_verification:
+  stage: verify
+  script:
+    - alloy compile hybrid_memory.als --verifier=Alloy4
+    - alloy check HybridSafety --max-trace=5
+  artifacts:
+    paths:
+      - verification_report.alloy
 
 deploy_prod:
   stage: deploy

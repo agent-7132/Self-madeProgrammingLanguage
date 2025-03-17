@@ -61,12 +61,14 @@ class QuantumAIModel:
 
 # File: quantum_onnx.py
 #
+# File: quantum_onnx.py
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import QuantumConvolution
 import onnxruntime
 import numpy as np
 from typing import Dict, Any
-from math.simd import vectorize  # 新增SIMD模块
+from math.simd import vectorize  # 路径修正
+from scipy.linalg.blas import sgemm  # 新增MKL集成
 
 class QuantumOpKernel:
     def __init__(self, provider: str = 'qiskit'):
@@ -81,7 +83,6 @@ class QuantumOpKernel:
         raise ValueError(f"Unsupported provider: {provider}")
 
     def bind(self, node_proto):
-        """将ONNX节点绑定到量子操作"""
         if node_proto.op_type == "QuantumConv":
             return self._compile_qiskit_conv(node_proto)
         elif node_proto.op_type == "QuantumPool":
@@ -89,7 +90,6 @@ class QuantumOpKernel:
         raise NotImplementedError(f"Operation {node_proto.op_type} not supported")
 
     def _compile_qiskit_conv(self, node_proto):
-        """编译量子卷积层"""
         qubits = node_proto.attribute[0].i
         depth = node_proto.attribute[1].i if len(node_proto.attribute) > 1 else 3
         
@@ -103,7 +103,6 @@ class QuantumOpKernel:
         return gate
 
     def execute(self, gate_name: str, inputs: np.ndarray) -> np.ndarray:
-        """执行量子操作"""
         qc = QuantumCircuit(self.compiled_gates[gate_name].num_qubits)
         qc.append(self.compiled_gates[gate_name], qc.qubits)
         qc.save_statevector()
@@ -112,10 +111,12 @@ class QuantumOpKernel:
         statevector = result.get_statevector()
         return self._postprocess(statevector)
 
-    @vectorize(backend='avx1024')  # 应用向量化装饰器
+    @vectorize(backend='avx512')  # 替换为AVX512
     def _postprocess(self, statevector: np.ndarray) -> np.ndarray:
-        """将量子态转换为经典数据"""
-        return np.abs(statevector)**2
+        # 使用MKL加速的矩阵运算
+        real_part = np.array(statevector.real, dtype=np.float32)
+        imag_part = np.array(statevector.imag, dtype=np.float32)
+        return sgemm(alpha=1.0, a=real_part, b=imag_part, trans_b=True)
 
 class QuantumONNXRuntime:
     def __init__(self, model_path: str):
@@ -130,7 +131,6 @@ class QuantumONNXRuntime:
         }
 
     def infer(self, inputs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        """混合量子-经典推理"""
         for name, kernel in self.quantum_kernels.items():
             inputs[name] = kernel.execute(name, inputs[name])
         
@@ -150,12 +150,19 @@ class QuantumONNXRuntime:
     <LoopController>
       <loops>1000</loops>
     </LoopController>
-    <HTTPSampler>
-      <protocol>grpc</protocol>
-      <server>localhost:50051</server>
-      <method>SyntaxValidator/Validate</method>
-      <payload>${__FileToString(quantum_code.qs)}</payload>
-    </HTTPSampler>
+    <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="gRPC Request">
+      <elementProp name="GRPC" elementType="GRPC">
+        <protocol>grpc</protocol>
+        <serverName>localhost</serverName>
+        <port>50051</port>
+        <method>SyntaxValidator/Validate</method>
+        <metadata>
+          <key>content-type</key>
+          <value>application/grpc</value>
+        </metadata>
+        <payload>${__FileToString(quantum_code.qs)}</payload>
+      </elementProp>
+    </HTTPSamplerProxy>
   </ThreadGroup>
   <ResultCollector>
     <name>聚合报告</name>
@@ -262,8 +269,10 @@ inline void* malloc_embedded(size_t size) {
 
 inline void free_embedded(void* ptr) {}
 
+#ifdef EMBEDDED
 #define malloc(size) malloc_embedded(size)
-#define free(ptr) free_embedded(ptr)
+#define free(ptr) ((void)0)
+#endif
 
 
 // File: jtag_qvm.c
@@ -321,6 +330,37 @@ inline int check_memory_safety(MemoryBlock block) {
            ((uintptr_t)block.base >= (uintptr_t)memory_arena) &&
            ((uintptr_t)block.base + block.size <= (uintptr_t)memory_arena + ARENA_SIZE);
 }
+
+
+# File: actor_system.py
+#
+# File: phase4/concurrency/actor_system.py
+from protoactor import Actor, PID, RootContext
+from .quantum_tasks import QuantumTask, execute_quantum_task
+
+class QuantumActor(Actor):
+    async def receive(self, context: RootContext):
+        msg = context.message
+        if isinstance(msg, QuantumTask):
+            result = await execute_quantum_task(msg.circuit)
+            context.send(context.parent, result)
+
+class HybridScheduler:
+    def __init__(self):
+        self.actor_pool = [PID(address="localhost", id=f"actor_{i}") for i in range(4)]
+        self.go_style_scheduler = GoScheduler()
+    
+    async def dispatch(self, task):
+        if task.type == QUANTUM_TASK:
+            actor = self.actor_pool[hash(task) % 4]
+            return await actor.request(task)
+        else:
+            return await self.go_style_scheduler.run(task)
+
+class GoScheduler:
+    async def run(self, task):
+        # 实现协程调度逻辑
+        pass
 
 
 # File: hybrid_scheduler.py
@@ -381,57 +421,6 @@ class ErrorMonitor:
     """错误监控模块（保持原有实现）"""
     def __init__(self):
         self.error_log = []
-
-
-# File: actor-system.py
-#
-from protoactor import SupervisorActor
-import numpy as np
-import time
-
-class QuantumAwareSupervisor(SupervisorActor):
-    async def receive(self, ctx):
-        if isinstance(ctx.message, dict) and 'type' in ctx.message:
-            if ctx.message['type'] == 'QuantumDecoherenceAlert':
-                ctx.restart_actor_with(ctx.actor, 
-                    state=self.snapshot_recovery(ctx.actor))
-            
-    def snapshot_recovery(self, actor):
-        return {
-            'quantum_state': actor.state.get('quantum_state', np.zeros(2)),
-            'classical_state': actor.state.get('last_stable_checkpoint', 0)
-        }
-
-class ResilientMailbox:
-    def __init__(self):
-        self.pending = []
-        self.retry_policy = ExponentialBackoffRetry()
-        
-    def deliver(self, msg):
-        try:
-            checksum = self.calculate_quantum_checksum(msg)
-            if self.verify_integrity(checksum):
-                return super().deliver(msg)
-        except Exception as e:
-            self.retry_policy.handle(msg)
-
-    def calculate_quantum_checksum(self, msg):
-        state = np.array([1, 0])
-        for _ in range(4):
-            state = np.kron(state, state)
-        return np.sum(np.abs(state))
-
-class ExponentialBackoffRetry:
-    def __init__(self):
-        self.max_retries = 5
-        self.current_retry = 0
-
-    def handle(self, msg):
-        if self.current_retry < self.max_retries:
-            time.sleep(2 ** self.current_retry)
-            self.current_retry += 1
-            return True
-        return False
 
 
 # File: system.py

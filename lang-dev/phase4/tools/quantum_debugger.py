@@ -1,5 +1,7 @@
 import socket
 import struct
+import json
+import marshal
 from qiskit import QuantumCircuit
 
 class JTAGQVMDebugger:
@@ -8,11 +10,8 @@ class JTAGQVMDebugger:
         self.sock.connect((ip, port))
     
     def capture_statevector(self, circuit: QuantumCircuit):
-        # 发送调试命令
-        cmd = struct.pack('!B', 0x01)  # 捕获状态命令
+        cmd = struct.pack('!B', 0x01)
         self.sock.sendall(cmd)
-        
-        # 接收量子态数据
         raw_data = self.sock.recv(16 * 1024)
         return self._parse_statevector(raw_data)
     
@@ -25,6 +24,18 @@ class JTAGQVMDebugger:
     
     def set_breakpoint(self, qubit: int, condition: str):
         cmd = struct.pack('!BI', 0x02, qubit) + condition.encode()
+        self.sock.sendall(cmd)
+    
+    def set_conditional_breakpoint(self, qubit: int, condition: callable):
+        """支持Lambda条件断点"""
+        condition_code = marshal.dumps(condition.__code__)
+        cmd = struct.pack('!BII', 0x04, qubit, len(condition_code)) + condition_code
+        self.sock.sendall(cmd)
+    
+    def quantum_watchpoint(self, state_pattern: dict):
+        """量子态模式观察点"""
+        packed = json.dumps(state_pattern).encode()
+        cmd = struct.pack('!BI', 0x05, len(packed)) + packed
         self.sock.sendall(cmd)
     
     def single_step(self):
