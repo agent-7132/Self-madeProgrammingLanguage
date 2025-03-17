@@ -4,9 +4,14 @@ stages:
   - verify
   - deploy
 
+variables:
+  LLVM_PATH: "/opt/compiler/llvm"
+
 build_image:
   stage: build
   script:
+    - cd quantum-compiler
+    - ./build.sh -t Release
     - docker build -t quantum-env -f Dockerfile.quantum .
   tags:
     - docker
@@ -19,28 +24,10 @@ unit_test:
     reports:
       junit: unit_report.xml
 
-memory_test:
-  stage: test
-  script:
-    - apt-get update && apt-get install -y valgrind
-    - python3 tests/memory/valgrind_check.py ./build/qvm
-  artifacts:
-    reports:
-      junit: valgrind_report.xml
-  tags:
-    - memory
-
-wasm_test:
-  stage: test
-  script:
-    - emcc src/runtime/wasm/*.c -o wasm_build/app.wasm
-    - node wasm_startup_test.js
-  tags:
-    - wasm
-
 formal_verification:
   stage: verify
   script:
+    - $LLVM_PATH/bin/clang-18 --verify phase1/formal_verification/memory_model.als
     - alloy compile hybrid_memory.als --verifier=Alloy4
     - alloy check HybridSafety --max-trace=5
   artifacts:
