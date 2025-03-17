@@ -60,24 +60,23 @@ contract LanguageDAO {
     
     mapping(uint256 => Proposal) public proposals;
     mapping(uint256 => mapping(address => bool)) public hasVoted;
+    mapping(bytes32 => bool) public usedHashes;
     uint256 public proposalCount;
     bytes32 public merkleRoot;
     
     constructor(bytes32 _merkleRoot) {
         merkleRoot = _merkleRoot;
-        proposals[0] = Proposal({
-            proposalHash: bytes32(0),
-            voteStart: 0,
-            voteEnd: 0,
-            yesVotes: 0,
-            noVotes: 0
-        });
     }
     
     function submitProposal(
         bytes32 proposalHash, 
         bytes32[] calldata proof
     ) external {
+        require(block.timestamp > 1640995200, "Genesis period ongoing");
+        bytes32 txHash = keccak256(abi.encodePacked(tx.origin));
+        require(!usedHashes[txHash], "Duplicate submission");
+        usedHashes[txHash] = true;
+        
         require(verifyProof(proof, msg.sender), "Not authorized");
         
         proposals[proposalCount++] = Proposal({

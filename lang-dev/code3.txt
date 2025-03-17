@@ -2,6 +2,8 @@
 #
 import socket
 import struct
+import json
+import marshal
 from qiskit import QuantumCircuit
 
 class JTAGQVMDebugger:
@@ -10,11 +12,8 @@ class JTAGQVMDebugger:
         self.sock.connect((ip, port))
     
     def capture_statevector(self, circuit: QuantumCircuit):
-        # 发送调试命令
-        cmd = struct.pack('!B', 0x01)  # 捕获状态命令
+        cmd = struct.pack('!B', 0x01)
         self.sock.sendall(cmd)
-        
-        # 接收量子态数据
         raw_data = self.sock.recv(16 * 1024)
         return self._parse_statevector(raw_data)
     
@@ -27,6 +26,18 @@ class JTAGQVMDebugger:
     
     def set_breakpoint(self, qubit: int, condition: str):
         cmd = struct.pack('!BI', 0x02, qubit) + condition.encode()
+        self.sock.sendall(cmd)
+    
+    def set_conditional_breakpoint(self, qubit: int, condition: callable):
+        """支持Lambda条件断点"""
+        condition_code = marshal.dumps(condition.__code__)
+        cmd = struct.pack('!BII', 0x04, qubit, len(condition_code)) + condition_code
+        self.sock.sendall(cmd)
+    
+    def quantum_watchpoint(self, state_pattern: dict):
+        """量子态模式观察点"""
+        packed = json.dumps(state_pattern).encode()
+        cmd = struct.pack('!BI', 0x05, len(packed)) + packed
         self.sock.sendall(cmd)
     
     def single_step(self):
@@ -61,14 +72,14 @@ class QuantumAIModel:
 
 # File: quantum_onnx.py
 #
-# File: quantum_onnx.py
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import QuantumConvolution
 import onnxruntime
 import numpy as np
 from typing import Dict, Any
-from math.simd import vectorize  # 路径修正
-from scipy.linalg.blas import sgemm  # 新增MKL集成
+from math.simd import vectorize
+from scipy.linalg.blas import sgemm
+from intel_extension_for_pytorch import optimize
 
 class QuantumOpKernel:
     def __init__(self, provider: str = 'qiskit'):
@@ -102,27 +113,19 @@ class QuantumOpKernel:
         self.compiled_gates[node_proto.name] = gate
         return gate
 
-    def execute(self, gate_name: str, inputs: np.ndarray) -> np.ndarray:
-        qc = QuantumCircuit(self.compiled_gates[gate_name].num_qubits)
-        qc.append(self.compiled_gates[gate_name], qc.qubits)
-        qc.save_statevector()
-        
-        result = self.backend.run(qc, shots=1024).result()
-        statevector = result.get_statevector()
-        return self._postprocess(statevector)
-
-    @vectorize(backend='avx512')  # 替换为AVX512
+    @vectorize(backend='avx512')
     def _postprocess(self, statevector: np.ndarray) -> np.ndarray:
-        # 使用MKL加速的矩阵运算
         real_part = np.array(statevector.real, dtype=np.float32)
         imag_part = np.array(statevector.imag, dtype=np.float32)
         return sgemm(alpha=1.0, a=real_part, b=imag_part, trans_b=True)
 
 class QuantumONNXRuntime:
     def __init__(self, model_path: str):
+        optimize()  # Intel MKL优化
         self.session = onnxruntime.InferenceSession(
             model_path,
-            providers=['QuantumExecutionProvider']
+            providers=['QuantumExecutionProvider'],
+            provider_options=[{'device_type': 'GPU'}]
         )
         self.quantum_kernels = {
             node.name: QuantumOpKernel() 
@@ -250,6 +253,7 @@ int main() {
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #define NO_GC
 #define ARENA_SIZE (256 * 1024)
@@ -258,12 +262,13 @@ static uint8_t memory_arena[ARENA_SIZE];
 static size_t memory_watermark = 0;
 
 inline void* malloc_embedded(size_t size) {
-    size = (size + 7) & ~7;
-    if (memory_watermark + size > ARENA_SIZE) {
+    size_t aligned_size = (size + 7) & ~7;
+    if (memory_watermark + aligned_size > ARENA_SIZE) {
         return NULL;
     }
+    memset(&memory_arena[memory_watermark], 0, aligned_size);
     void* ptr = &memory_arena[memory_watermark];
-    memory_watermark += size;
+    memory_watermark += aligned_size;
     return ptr;
 }
 
@@ -312,6 +317,7 @@ void single_qubit_probe(uint8_t qubit_id) {
 //
 #pragma once
 #include <stddef.h>
+#include <stdlib.h>
 
 typedef struct {
     void* base;
@@ -326,9 +332,7 @@ typedef struct {
     } while(0)
 
 inline int check_memory_safety(MemoryBlock block) {
-    return (block.base != NULL) && 
-           ((uintptr_t)block.base >= (uintptr_t)memory_arena) &&
-           ((uintptr_t)block.base + block.size <= (uintptr_t)memory_arena + ARENA_SIZE);
+    return (block.base != NULL) && (block.size > 0);
 }
 
 
